@@ -5,11 +5,14 @@ import (
 	"Notes_GoRest/pkg/handler"
 	"Notes_GoRest/pkg/repository"
 	"Notes_GoRest/pkg/service"
+	"context"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -44,8 +47,27 @@ func main() {
 	logrus.Printf("Server running at port: %s", viper.GetString("port"))
 
 	srv := new(todo.Server)
-	if err := srv.Run(viper.GetString("port"), handlers.InitRoutes()); err != nil {
-		logrus.Fatalf("error occured while running server: %s", err.Error())
+
+	go func() {
+		if err := srv.Run(viper.GetString("port"), handlers.InitRoutes()); err != nil {
+			logrus.Fatalf("error occured while running server: %s", err.Error())
+		}
+	}()
+
+	logrus.Printf("Server started")
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logrus.Printf("Server shutting down")
+
+	if err := srv.Stop(context.Background()); err != nil {
+		logrus.Fatalf("error occured while shutting down server: %s", err.Error())
+	}
+
+	if err := db.Close(); err != nil {
+		logrus.Fatalf("error occured while closing db: %s", err.Error())
 	}
 }
 
